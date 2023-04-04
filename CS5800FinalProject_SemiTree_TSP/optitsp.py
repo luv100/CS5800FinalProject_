@@ -9,28 +9,11 @@ from gurobipy import *
 # Provides a subroutine to run optimizedtsp
 
 def solve(sloc, stas, G, donttouch=set()):
-    
-    # flo
     pcessors, alldists = nx.floyd_warshall_predecessor_and_distance(G)
 
-    print("Line 14 Applied Floyd Warshall:, optitsp, pcessors, alldists", pcessors, alldists)
     ta_cycle = gurobiTspCycle(sloc, stas, alldists)
-    
-    """
-    The optCycle function plays a role in refining the initial tour generated 
-    by gurobiTspCycle. It takes the initial tour (ta_cycle) and tries to find 
-    better drop-off locations for each TA (excluding the ones in donttouch). 
-    This is an additional optimization step aiming to further minimize the overall cost.
-
-    The optCycle function is required in the solve method because it improves the 
-    quality of the solution by attempting to identify better drop-off locations
-    for the TAs. This may lead to a more efficient and cost-effective tour.
-    
-    """
     drop_cycle = optCycle(ta_cycle, alldists, donttouch)
-    
     listdropoffs = reconDropoffs(sloc, stas, ta_cycle, drop_cycle)
-    
     if (len(listdropoffs) > 1):
         drop_cycle = gurobiTspCycle(sloc, set(listdropoffs.keys()), alldists)
     listlocs = reconLocs(drop_cycle, pcessors)
@@ -59,9 +42,7 @@ def tspCycle(sloc, stas, alldists, timeout=0):
 
     # Run TSP
     manager = pywrapcp.RoutingIndexManager(len(dp_dist), dp_num_vehicles, dp_depot)
-    
     routing = pywrapcp.RoutingModel(manager)
-    
     def distance_callback(from_index, to_index):
         from_node = manager.IndexToNode(from_index)
         to_node = manager.IndexToNode(to_index)
@@ -87,21 +68,6 @@ def tspCycle(sloc, stas, alldists, timeout=0):
 
     return ta_cycle
 
-"""
-Here's a high-level overview of the gurobiTspCycle function:
-
-1. Create a Gurobi model m.
-2. Define the set of nodes as the union of stas and sloc.
-3. Create binary variables for each edge between nodes, with objective coefficients equal to the distances between nodes.
-4. Add degree-2 constraints for each node, ensuring that each node has one incoming and one outgoing edge.
-5. Define the subtour elimination callback function cbSubtourElim. This function checks the current solution for subtours and adds lazy constraints to eliminate them.
-6. Set the model's LazyConstraints parameter to 1 and optimize the model using the cbSubtourElim callback.
-7. Extract the selected edges from the optimized model.
-8.Find the single cycle in the selected edges using the getCycles function.
-9. Rearrange the cycle so that it starts with sloc and ends with sloc.
-10. Return the final cycle as the TSP solution.
-
-"""
 def gurobiTspCycle(sloc, stas, alldists):
     m = Model()
 
@@ -122,10 +88,6 @@ def gurobiTspCycle(sloc, stas, alldists):
     m.update()
 
     # Add lazy constraint
-    
-    # Define the subtour elimination callback function:
-    #a. Check if the current solution contains multiple cycles.
-    #b. If subtours are found, add constraints to break the subtours.
     def cbSubtourElim(model, where):
         if where == GRB.callback.MIPSOL:
             ed = [] # make list of selected edges
@@ -142,11 +104,7 @@ def gurobiTspCycle(sloc, stas, alldists):
                         for j in c:
                             expr += e[i,j]
                     model.cbLazy(expr <= len(c) - 1)
-    
-    # Define the subtour elimination callback function:
-    #a. Check if the current solution contains multiple cycles.
-    #b. If subtours are found, add constraints to break the subtours.
-    
+
     def getCycles(edges):
         visited = {i[0]:False for i in edges}
         nexts = {i[0]:i[1] for i in edges}
@@ -172,7 +130,7 @@ def gurobiTspCycle(sloc, stas, alldists):
     m.params.LazyConstraints = 1
     m.optimize(cbSubtourElim)
 
-    # Get travel cycle Identify the single cycle in the final solution.
+    # Get travel cycle
     ed = [] # get selected edges
     edec = m.getAttr('x', e)
     for i in nodes:
@@ -180,8 +138,6 @@ def gurobiTspCycle(sloc, stas, alldists):
             if edec[i,j] > 0.5:
                 ed.append((i,j))
     cycles = getCycles(ed) # find the one cycle
-    
-    # Rearrange the final cycle to start with the desired starting node and return the resulting tour.
     if cycles:
         c = cycles[0] # rearrange so sloc first
         indstart = c.index(sloc)
@@ -191,23 +147,9 @@ def gurobiTspCycle(sloc, stas, alldists):
 
     return jumpcycle
 
-    # Runs basic optimization on TSP cycle, just tries alternate dropoff points
-    """
-    The optCycle function plays a role in refining the initial tour generated 
-    by gurobiTspCycle. It takes the initial tour (ta_cycle) and tries to find 
-    better drop-off locations for each TA (excluding the ones in donttouch). 
-    This is an additional optimization step aiming to further minimize the overall cost.
-    
-    The optCycle function is required in the solve method because it improves the 
-    quality of the solution by attempting to identify better drop-off locations
-    for the TAs. This may lead to a more efficient and cost-effective tour.
-    
-    fine-tuning step. 
-    """
+# Runs basic optimization on TSP cycle, just tries alternate dropoff points
 def optCycle(ta_cycle, alldists, donttouch):
-    
     drop_cycle = ta_cycle.copy() # Find best location to dropoff corresponding TA in ta_cycle, initially just the TA's home
-    
     for _ in range(len(drop_cycle)): # Doing this enough times hopefully does a good job
         for i in range(1, len(drop_cycle) - 1): # Check for better dropoff location for each TA
             if ta_cycle[i] not in donttouch:
