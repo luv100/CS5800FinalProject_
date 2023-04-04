@@ -150,7 +150,7 @@ if __name__=="__main__":
             self.output_directory = output_directory
             self.params = params
     
-    args = Args(all=False, input="Inputs_to_test_current_code", output_directory="output", params=None)
+    args = Args(all=True, input="Inputs_to_test_current_code", output_directory="output", params=None)
     #args = parser.parse_args()
     #("args.all",args.all)
     output_directory = args.output_directory
